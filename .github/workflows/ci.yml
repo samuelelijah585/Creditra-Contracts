@@ -85,6 +85,14 @@ jobs:
         working-directory: contracts/creditra-credit
         run: cargo test $CARGOFLAGS --no-fail-fast
 
+      # The CosmWasm steps above cover contracts/creditra-credit only. The
+      # Soroban credit-line contract lives in the root workspace member
+      # `contracts/credit`, and its 115 test files - including the
+      # close_credit_line authorization snapshots - were never executed by CI.
+      # Run them so a regression that drops `closer.require_auth()` fails here.
+      - name: Run Soroban credit contract tests
+        run: cargo test -p creditra-credit --no-fail-fast
+
       - name: Build native release
         working-directory: contracts/creditra-credit
         run: cargo build $CARGOFLAGS --release

@@ -818,16 +818,18 @@ pub fn close_credit_line(env: Env, borrower: Address, closer: Address) {
 /// - `borrowers`: List of borrower addresses to close.
 ///
 /// # Authorization
-/// Requires admin authorization.
+/// Admin only. Enforced by the `lib.rs` wrapper (`require_admin_auth`), which
+/// authorizes the admin exactly once per invocation; not re-checked here, for
+/// the same double-`require_auth` reason documented on `suspend_credit_line`.
 ///
 /// # Errors
 /// - Reverts if any close fails (e.g., credit line not found, already closed).
 /// - Reverts if borrowers.len() > BATCH_CLOSE_MAX.
 pub fn close_credit_lines_batch(env: Env, borrowers: Vec<Address>) {
     assert_not_paused(&env);
-    require_admin_auth(&env);
 
-    // Resolve admin just once, to save storage access
+    // `require_admin` only reads the stored admin address; it does not
+    // authorize. The wrapper above has already required the admin's auth.
     let admin: Address = require_admin(&env);
 
     // Process each borrower in order; failure of any reverts the whole batch

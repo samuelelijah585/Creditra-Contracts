@@ -287,10 +287,6 @@ impl Credit {
         (1, 0, 0)
     }
 
-    pub fn init(env: Env, admin: Address) {
-        config::init(env, admin)
-    }
-
     pub fn get_contract_version() -> (u32, u32, u32) {
         CONTRACT_API_VERSION
     }
@@ -1883,6 +1879,13 @@ impl Credit {
 
     /// Admin-only batch close of multiple credit lines.
     /// Reverts on first failure, ensuring atomicity.
+    ///
+    /// # Authorization
+    /// This wrapper is the single authorization point for the batch path. It
+    /// calls `require_admin_auth` exactly once, before delegating to
+    /// `lifecycle::close_credit_lines_batch`, which must not re-authorize the
+    /// same address — the Soroban auth-mock treats a second `require_auth` for
+    /// an already-authorized address in the same frame as an error.
     ///
     /// # Parameters
     /// - `borrowers`: List of borrower addresses to close; max `BATCH_CLOSE_MAX`

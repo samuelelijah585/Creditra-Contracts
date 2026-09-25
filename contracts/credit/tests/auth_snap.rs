@@ -293,14 +293,57 @@ fn close_credit_line_borrower_path_requires_borrower_auth() {
     assert_eq!(last.0, borrower, "close_credit_line (borrower) must be authorised by borrower");
 }
 
-/// close_credit_line without the closer's auth panics.
+/// close_credit_line without the closer's auth panics before any state read.
+///
+/// Regression test for #1148. This closes the *real* borrower's line, which is
+/// open and fully repaid, so an authorized close would succeed. If
+/// `closer.require_auth()` were removed from the `lib.rs` wrapper this call
+/// would return normally and the test would fail. The previous version of this
+/// test passed `admin` as both borrower and closer; `admin` owns no credit
+/// line, so it panicked with `CreditLineNotFound` for the wrong reason and
+/// stayed green even with the auth check deleted.
 #[test]
 #[should_panic]
 fn close_credit_line_without_closer_auth_panics() {
-    let (_env, client, admin, _borrower) = setup_no_mock();
-    // Pass admin as closer but don't provide any auth — must panic.
-    let fake_closer = admin;
-    client.close_credit_line(&fake_closer, &fake_closer);
+    let (_env, client, _admin, borrower) = setup_no_mock();
+    client.close_credit_line(&borrower, &borrower);
+}
+
+/// A fully authorized stranger is still rejected: the auth check passes and the
+/// identity check is what refuses the close.
+///
+/// This is the other half of #1148 — `unauthorized_matrix.rs` exercises the
+/// stranger path without any auth context, so it panics at `require_auth` and
+/// never reaches the admin/borrower identity comparison. `setup()` enables
+/// `mock_all_auths`, so `require_auth` succeeds here and the only thing that can
+/// reject the call is `ContractError::Unauthorized` (#1).
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn close_credit_line_authorized_stranger_rejected() {
+    let (env, client, _admin, borrower) = setup();
+    let stranger = Address::generate(&env);
+    client.close_credit_line(&borrower, &stranger);
+}
+
+/// The batch close path authorizes the admin exactly once and records it.
+#[test]
+fn close_credit_lines_batch_requires_admin_auth() {
+    let (env, client, admin, borrower) = setup();
+    client.close_credit_lines_batch(&vec![&borrower]);
+    let auths = env.auths();
+    let last = auths.last().unwrap();
+    assert_eq!(
+        last.0, admin,
+        "close_credit_lines_batch must be authorised by admin"
+    );
+}
+
+/// The batch close path must reject a call with no admin auth at all.
+#[test]
+#[should_panic]
+fn close_credit_lines_batch_without_admin_auth_panics() {
+    let (_env, client, _admin, borrower) = setup_no_mock();
+    client.close_credit_lines_batch(&vec![&borrower]);
 }
 
 // ── default_credit_line ───────────────────────────────────────────────────────
